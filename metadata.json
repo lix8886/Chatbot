@@ -1,0 +1,7 @@
+{
+  "name": "Chatbot",
+  "description": "A high-fidelity clone of the chat interface powered by Google Gemini 2.5 Flash.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
