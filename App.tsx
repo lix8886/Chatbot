@@ -207,6 +207,47 @@ const App: React.FC = () => {
     }
   };
 
+  const handleRegenerateMessage = async (messageId: string) => {
+    if (isGenerating) return;
+
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1 || messages[messageIndex].role !== 'model') return;
+
+    // Find previous user message
+    const prevUserMessage = messages[messageIndex - 1];
+    if (!prevUserMessage) return;
+
+    // Truncate history: Keep messages up to the current bot message
+    // and clear the bot message content to start fresh
+    const newMessages = messages.slice(0, messageIndex + 1);
+    newMessages[messageIndex] = { ...newMessages[messageIndex], text: '' };
+    
+    setMessages(newMessages);
+    setIsGenerating(true);
+
+    // Prepare API history: All messages UP TO the user message (exclusive)
+    const historyMessages = messages.slice(0, messageIndex - 1);
+    const historyForApi = historyMessages.map(m => ({ role: m.role, parts: [{ text: m.text }] }));
+
+    try {
+      const stream = await streamGeminiResponse(prevUserMessage.text, historyForApi, selectedModel.id);
+      let fullText = '';
+      for await (const chunk of stream) {
+        fullText += chunk;
+        setMessages((prev) => prev.map((msg) => msg.id === messageId ? { ...msg, text: fullText } : msg));
+      }
+    } catch (error) {
+      console.error("Failed to regenerate", error);
+      setMessages((prev) => prev.map((msg) => msg.id === messageId ? { ...msg, text: "Regeneration failed." } : msg));
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleRateMessage = (messageId: string, rating: 'liked' | 'disliked' | undefined) => {
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, rating } : m));
+  };
+
   return (
     <div className="flex h-screen w-full bg-white overflow-hidden">
       <Sidebar 
@@ -284,7 +325,12 @@ const App: React.FC = () => {
             </div>
           ) : (
             <>
-              <MessageList messages={messages} />
+              <MessageList 
+                messages={messages} 
+                onRegenerate={handleRegenerateMessage}
+                onRate={handleRateMessage}
+                isGenerating={isGenerating}
+              />
               <div className="w-full pb-6 pt-2">
                  <InputArea onSend={handleSendMessage} disabled={isGenerating} />
               </div>
